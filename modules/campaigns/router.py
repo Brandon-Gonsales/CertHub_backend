@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, Body, status, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from . import service
 from .schemas import CampaignCreateResponse, MessageUpdateRequest, ActivateCampaignRequest
 
@@ -65,4 +66,30 @@ def activate_campaign(
         campaign_id, 
         payload.fixed_url, 
         background_tasks
+    )
+
+@router.get("/certificates/{code}",
+            response_class=StreamingResponse,
+            tags=["Certificates"],
+            responses={
+                200: {
+                    "content": {"application/pdf": {}},
+                    "description": "Devuelve el certificado en formato PDF."
+                },
+                404: { "description": "Código no encontrado." }
+            })
+def get_certificate(code: str):
+    """
+    Valida un código de 8 dígitos y, si es válido, genera y devuelve
+    el certificado personalizado en formato PDF.
+    """
+    pdf_buffer = service.get_certificate_by_code(code)
+    
+    # Creamos un nombre de archivo dinámico
+    filename = f"certificado_{code}.pdf"
+    
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"} # <-- Cambiado
     )

@@ -21,3 +21,7 @@ python-dotenv>=1.0.1
 
 # Envío de correos con soporte para Pydantic v2
 fastapi-mail>=1.4.1
+
+Pillow
+reportlab
+PyPDF2

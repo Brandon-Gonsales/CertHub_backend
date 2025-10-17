@@ -11,6 +11,122 @@ from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from core.config import settings
 import asyncio 
 
+import io
+import os
+from PIL import Image, ImageDraw, ImageFont
+from PyPDF2 import PdfReader, PdfWriter
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+def _find_student_and_campaign_by_code(code: str):
+    """
+    Busca en toda la 'base de datos' un estudiante por su código único.
+    Devuelve el estudiante y la campaña a la que pertenece.
+    """
+    for campaign in db.values():
+        for student in campaign.students:
+            if student.codigo == code:
+                return student, campaign
+    return None, None
+
+
+def _generate_certificate(student_name: str, template: TemplateDetails):
+    """
+    Genera el certificado en PDF escribiendo el nombre del estudiante
+    sobre la plantilla base (imagen o PDF).
+    """
+    base_path = template.certificate_path
+    
+    # -------------------------------------------------------------------
+    # ESTA ES LA PARTE NUEVA QUE ARREGLA EL PROBLEMA
+    # -------------------------------------------------------------------
+    
+    # Esto es lo que envía tu frontend (ej: "001")
+    font_identifier = template.font_family 
+    font_path = None
+    
+    # Paso A: Leemos todos los archivos que hay en la carpeta "fonts"
+    try:
+        # ¡IMPORTANTE! Si tu carpeta se llama "fuentes", cambia "fonts" a "fuentes" aquí abajo.
+        available_fonts = os.listdir("fonts") 
+        
+        # Paso B: Buscamos un archivo que contenga el identificador
+        for filename in available_fonts:
+            # Esta línea comprueba si "001" está dentro del nombre "font_001.ttf"
+            if font_identifier in filename:
+                # ¡Lo encontramos! Guardamos la ruta completa
+                font_path = os.path.join("fonts", filename) # De nuevo, cambia "fonts" si es necesario
+                break 
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="La carpeta 'fonts' no se encuentra en el servidor.")
+
+    # Paso C: Si no encontramos ninguna fuente, devolvemos un error claro
+    if not font_path:
+        raise HTTPException(status_code=500, detail=f"La fuente con el identificador '{font_identifier}' no se encuentra en el servidor.")
+    
+    # -------------------------------------------------------------------
+    # EL RESTO DEL CÓDIGO AHORA USA LA RUTA CORRECTA QUE ENCONTRAMOS
+    # -------------------------------------------------------------------
+
+    buffer = io.BytesIO()
+    
+    if base_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+        with Image.open(base_path) as img:
+            draw = ImageDraw.Draw(img)
+            font = ImageFont.truetype(font_path, template.font_size)
+            draw.text((template.x, template.y), student_name, font=font, fill="black")
+            img.convert('RGB').save(buffer, format='PDF')
+
+    elif base_path.lower().endswith('.pdf'):
+        existing_pdf = PdfReader(open(base_path, "rb"))
+        page = existing_pdf.pages[0]
+        page_width = float(page.mediabox.width)
+        page_height = float(page.mediabox.height)
+
+        packet = io.BytesIO()
+        c = canvas.Canvas(packet, pagesize=(page_width, page_height))
+
+        font_name = os.path.splitext(os.path.basename(font_path))[0]
+        pdfmetrics.registerFont(TTFont(font_name, font_path))
+        c.setFont(font_name, template.font_size)
+        
+        y_coordinate = page_height - template.y - template.font_size
+        c.drawString(template.x, y_coordinate, student_name)
+        c.save()
+
+        packet.seek(0)
+        new_pdf = PdfReader(packet)
+        page.merge_page(new_pdf.pages[0])
+
+        writer = PdfWriter()
+        writer.add_page(page)
+        writer.write(buffer)
+    else:
+        raise HTTPException(status_code=400, detail="El formato del certificado no es compatible.")
+
+    buffer.seek(0)
+    return buffer
+
+
+def get_certificate_by_code(code: str):
+    """
+    Función principal del servicio para obtener un certificado.
+    """
+    student, campaign = _find_student_and_campaign_by_code(code)
+
+    if not student or not campaign:
+        raise HTTPException(status_code=404, detail="Código de certificado no válido o no encontrado.")
+    
+    if not campaign.template_details:
+        raise HTTPException(status_code=400, detail="La campaña de este certificado no tiene una plantilla configurada.")
+
+    # Generamos el PDF dinámicamente
+    pdf_buffer = _generate_certificate(student.nombre, campaign.template_details)
+    
+    return pdf_buffer
+
 # Creamos un directorio para guardar los archivos subidos
 UPLOAD_DIRECTORY = "./uploads"
 if not os.path.exists(UPLOAD_DIRECTORY):
