@@ -6,6 +6,10 @@ import os
 from fastapi import UploadFile, HTTPException, status
 from typing import Dict, List
 from .schemas import Campaign, TemplateDetails, Student
+from fastapi import BackgroundTasks
+from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
+from core.config import settings
+import asyncio 
 
 # Creamos un directorio para guardar los archivos subidos
 UPLOAD_DIRECTORY = "./uploads"
@@ -112,3 +116,71 @@ def update_campaign_message(campaign_id: str, message: str) -> Campaign:
     campaign = _get_campaign_or_404(campaign_id)
     campaign.email_message = message
     return campaign
+
+async def _send_emails_in_background(campaign: Campaign, fixed_url: str):
+    """
+    Esta función se ejecuta en segundo plano para enviar los correos.
+    """
+    # Configuración de conexión usando las variables de entorno
+    conf = ConnectionConfig(
+        MAIL_USERNAME = settings.MAIL_USERNAME,
+        MAIL_PASSWORD = settings.MAIL_PASSWORD,
+        MAIL_FROM = settings.MAIL_FROM,
+        MAIL_PORT = settings.MAIL_PORT,
+        MAIL_SERVER = settings.MAIL_SERVER,
+        MAIL_STARTTLS = settings.MAIL_STARTTLS,
+        MAIL_SSL_TLS = settings.MAIL_SSL_TLS,
+        USE_CREDENTIALS = True,
+        VALIDATE_CERTS = True
+    )
+
+    print(f"Iniciando envío de correos para la campaña: {campaign.id}")
+
+    # Iteramos sobre cada estudiante en la campaña
+    for student in campaign.students:
+        # Personalizamos el mensaje reemplazando los placeholders
+        # ¡IMPORTANTE! El mensaje debe contener {codigo} y {url}
+        personalized_body = campaign.email_message.format(
+            nombre=student.nombre,
+            codigo=student.codigo,
+            url=fixed_url
+        )
+        
+        message = MessageSchema(
+            subject=f"Tu código único para la campaña", # Asunto del correo
+            recipients=[student.correo],
+            body=personalized_body,
+            subtype="html" # Puedes usar "plain" o "html"
+        )
+
+        fm = FastMail(conf)
+        try:
+            await fm.send_message(message)
+            print(f"Correo enviado exitosamente a {student.correo}")
+        except Exception as e:
+            print(f"Error al enviar correo a {student.correo}: {e}")
+
+        await asyncio.sleep(1) # Pequeña pausa para no saturar el servidor SMTP
+
+
+def activate_campaign_and_send_emails(
+    campaign_id: str, 
+    fixed_url: str,
+    background_tasks: BackgroundTasks
+):
+    """
+    Valida la campaña y añade la tarea de envío de correos al segundo plano.
+    """
+    campaign = _get_campaign_or_404(campaign_id)
+
+    # Validaciones previas
+    if not campaign.students:
+        raise HTTPException(status_code=400, detail="La campaña no tiene estudiantes. Sube el archivo Excel primero.")
+    if not campaign.email_message:
+        raise HTTPException(status_code=400, detail="La campaña no tiene un mensaje de correo configurado.")
+
+    # Añadimos la función de envío a las tareas en segundo plano
+    # La aplicación responderá inmediatamente al usuario mientras esto se ejecuta por detrás.
+    background_tasks.add_task(_send_emails_in_background, campaign, fixed_url)
+    
+    return {"message": "La campaña ha sido activada. El envío de correos ha comenzado en segundo plano."}

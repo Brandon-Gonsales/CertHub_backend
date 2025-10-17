@@ -29,3 +29,7 @@ class CampaignCreateResponse(BaseModel):
 # Esquema para la solicitud de actualización del mensaje de email
 class MessageUpdateRequest(BaseModel):
     message: str = Field(..., min_length=10, description="El cuerpo del correo electrónico.")
+
+
+class ActivateCampaignRequest(BaseModel):
+    fixed_url: str = Field(..., description="URL fija que se incluirá en todos los correos.")

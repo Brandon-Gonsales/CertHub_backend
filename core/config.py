@@ -1,20 +1,23 @@
-import os
-from dotenv import load_dotenv
-from typing import List
+from pydantic_settings import BaseSettings
+from typing import List, Union
 
-# Carga las variables de entorno desde el archivo .env
-load_dotenv()
+class Settings(BaseSettings):
+    ALLOWED_ORIGINS: Union[List[str], str] = []
 
-class Settings:
-    # Lee la variable ALLOWED_ORIGINS del entorno. Si no existe, usa una cadena vacía.
-    ALLOWED_ORIGINS_STR: str = os.getenv("ALLOWED_ORIGINS", "")
-    
-    # Procesa la cadena para convertirla en una lista de URLs
-    @property
-    def ALLOWED_ORIGINS(self) -> List[str]:
-        if not self.ALLOWED_ORIGINS_STR:
-            return []
-        return [origin.strip() for origin in self.ALLOWED_ORIGINS_STR.split(',')]
+    MAIL_USERNAME: str
+    MAIL_PASSWORD: str
+    MAIL_FROM: str
+    MAIL_PORT: int = 587
+    MAIL_SERVER: str
+    MAIL_STARTTLS: bool = True
+    MAIL_SSL_TLS: bool = False
+    MAIL_FROM_NAME: str
 
-# Creamos una instancia única de la configuración para ser usada en la app
+    class Config:
+        env_file = ".env"
+        env_file_encoding = 'utf-8'
+
 settings = Settings()
+
+if isinstance(settings.ALLOWED_ORIGINS, str):
+    settings.ALLOWED_ORIGINS = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]

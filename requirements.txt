@@ -1,7 +1,23 @@
-fastapi
-uvicorn[standard]
-pydantic
-python-multipart
-pandas
-openpyxl
-python-dotenv
+# Framework principal
+fastapi>=0.115.0
+
+# Servidores ASGI (para desarrollo y producción)
+uvicorn[standard]>=0.30.0
+gunicorn>=22.0.0
+
+# Pydantic v2 y manejo de configuración
+pydantic>=2.4.0
+pydantic-settings>=2.0.3
+
+# Manejo de formularios, archivos y datos
+python-multipart>=0.0.9
+
+# Librerías de datos
+pandas>=2.2.2
+openpyxl>=3.1.2
+
+# Variables de entorno
+python-dotenv>=1.0.1
+
+# Envío de correos con soporte para Pydantic v2
+fastapi-mail>=1.4.1

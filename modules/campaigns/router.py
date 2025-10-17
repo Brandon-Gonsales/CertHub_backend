@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Form, Body, status
+from fastapi import APIRouter, Depends, UploadFile, File, Form, Body, status, BackgroundTasks
 from . import service
-from .schemas import CampaignCreateResponse, MessageUpdateRequest
+from .schemas import CampaignCreateResponse, MessageUpdateRequest, ActivateCampaignRequest
 
 # Creamos un "router" para agrupar todos los endpoints de campañas
 router = APIRouter(
@@ -50,3 +50,19 @@ def update_message(campaign_id: str, payload: MessageUpdateRequest):
     """
     service.update_campaign_message(campaign_id, payload.message)
     return {"message": "Mensaje de la campaña actualizado correctamente."}
+
+@router.post("/{campaign_id}/activate", status_code=status.HTTP_202_ACCEPTED)
+def activate_campaign(
+    campaign_id: str,
+    payload: ActivateCampaignRequest,
+    background_tasks: BackgroundTasks # FastAPI inyecta este objeto automáticamente
+):
+    """
+    Activa una campaña, iniciando el proceso de envío de correos a todos los
+    estudiantes registrados. Este proceso se ejecuta en segundo plano.
+    """
+    return service.activate_campaign_and_send_emails(
+        campaign_id, 
+        payload.fixed_url, 
+        background_tasks
+    )
