@@ -74,10 +74,10 @@ def update_campaign_students(campaign_id: str, students_file: UploadFile) -> int
         df.columns = [col.strip().lower() for col in df.columns]
 
         # Verificamos que las columnas 'nombres' y 'correo' existan
-        if  not(('nombre'  in df.columns or 'nombres' in df.columns) and ('correo'  in df.columns or 'correos'  in df.columns)):
+        if 'nombres' not in df.columns or 'correos' not in df.columns:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El archivo Excel debe contener las columnas 'nombre' y 'correo' ó 'nombres' y 'correos'."
+                detail="El archivo Excel debe contener las columnas 'nombres' y 'correo'."
             )
             
     except Exception as e:
