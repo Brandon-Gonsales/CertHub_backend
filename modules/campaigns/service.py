@@ -92,7 +92,7 @@ def update_campaign_students(campaign_id: str, students_file: UploadFile) -> int
 
     for index, row in df.iterrows():
         nombre = row['nombres']
-        correo = row['correo']
+        correo = row['correos']
         
         # Generamos un código único que no exista ya en la campaña
         while True:
