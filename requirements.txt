@@ -25,4 +25,3 @@ fastapi-mail>=1.4.1
 Pillow
 reportlab
 PyPDF2
-dateutil

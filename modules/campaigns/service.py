@@ -237,7 +237,6 @@ async def _send_emails_in_background(campaign: Campaign, fixed_url: str):
     """
     Esta función se ejecuta en segundo plano para enviar los correos.
     """
-    # Configuración de conexión usando las variables de entorno
     conf = ConnectionConfig(
         MAIL_USERNAME = settings.MAIL_USERNAME,
         MAIL_PASSWORD = settings.MAIL_PASSWORD,
@@ -250,23 +249,54 @@ async def _send_emails_in_background(campaign: Campaign, fixed_url: str):
         VALIDATE_CERTS = True
     )
 
+    # 1. PLANTILLA FIJA CON LOS PLACEHOLDERS
+    # Esta parte es constante y se añade a todos los correos.
+    EMAIL_FIXED_TEMPLATE = """
+    <br><br>
+    <hr style="border-top: 1px solid #dddddd;">
+    <p>Hola <strong>{nombre}</strong>,</p>
+    <p>Tu código de acceso único es: <strong>{codigo}</strong></p>
+    <p>Puedes usarlo en la siguiente dirección para obtener tu certificado:</p>
+    <p><a href="{url}">{url}</a></p>
+    <br>
+    <p style="font-size:12px; color:#888888;">
+        Este es un correo electrónico generado automáticamente. Por favor, no responda a este mensaje.<br>
+        <strong>Nombre de tu Organización</strong>
+    </p>
+    """
+
     print(f"Iniciando envío de correos para la campaña: {campaign.id}")
 
-    # Iteramos sobre cada estudiante en la campaña
     for student in campaign.students:
-        # Personalizamos el mensaje reemplazando los placeholders
-        # ¡IMPORTANTE! El mensaje debe contener {codigo} y {url}
-        personalized_body = campaign.email_message.format(
+        # 2. PREPARAR LAS DOS PARTES DEL MENSAJE
+        # Parte A: El mensaje del usuario, con saltos de línea convertidos a <br>
+        html_user_message = campaign.email_message.replace('\n', '<br>')
+
+        # Parte B: La plantilla fija, personalizada con los datos del estudiante
+        personalized_fixed_part = EMAIL_FIXED_TEMPLATE.format(
             nombre=student.nombre,
             codigo=student.codigo,
             url=fixed_url
         )
         
+        # 3. COMBINAR AMBAS PARTES EN UNA SOLA VARIABLE
+        # ¡ESTA LÍNEA ES CRUCIAL! Asegúrate de que estás sumando ambas partes.
+        final_email_body = html_user_message + personalized_fixed_part
+        
+        # 4. (PARA DEPURAR) Imprime el cuerpo final en la consola del servidor
+        # Esto te permitirá ver si la concatenación funcionó antes de enviar.
+        print("----------------------------------------------------")
+        print(f"Enviando a: {student.correo}")
+        print(f"CUERPO DEL EMAIL:\n{final_email_body}")
+        print("----------------------------------------------------")
+
         message = MessageSchema(
-            subject=f"Tu código único para la campaña", # Asunto del correo
+            subject="Tu código único para el certificado",
             recipients=[student.correo],
-            body=personalized_body,
-            subtype="html" # Puedes usar "plain" o "html"
+            # 5. ¡ESTA ES LA CAUSA MÁS PROBABLE DEL ERROR!
+            # Asegúrate de que aquí se usa 'final_email_body' y no otra variable.
+            body=final_email_body,
+            subtype="html"
         )
 
         fm = FastMail(conf)
@@ -276,8 +306,7 @@ async def _send_emails_in_background(campaign: Campaign, fixed_url: str):
         except Exception as e:
             print(f"Error al enviar correo a {student.correo}: {e}")
 
-        await asyncio.sleep(1) # Pequeña pausa para no saturar el servidor SMTP
-
+        await asyncio.sleep(1)
 
 def activate_campaign_and_send_emails(
     campaign_id: str, 
